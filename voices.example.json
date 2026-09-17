@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy to voices.local.json and fill in your own ElevenLabs voice ids. voices.local.json is gitignored — studio-specific voices never get committed.",
+
+  "step1_voice_id":   "REPLACE_WITH_YOUR_TTS_VOICE_ID",
+  "step1_voice_name": "My TTS voice",
+  "step2_voice_id":   "REPLACE_WITH_YOUR_STS_VOICE_ID",
+  "step2_voice_name": "My speech-to-speech voice"
+}

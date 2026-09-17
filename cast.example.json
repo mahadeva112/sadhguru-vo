@@ -1,0 +1,44 @@
+{
+  "NARRATOR": {
+    "speaker": "NARRATOR",
+    "mode": "both",
+    "step1_voice": "REPLACE_WITH_YOUR_VOICE_ID",
+    "step2_voice": "REPLACE_WITH_YOUR_STS_VOICE_ID",
+    "step1_model": "eleven_v3",
+    "step2_model": "eleven_multilingual_sts_v2",
+    "style": "",
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "style_exaggeration": 0.4,
+    "speaker_boost": true,
+    "gain_db": 0.0
+  },
+  "INTERVIEWER": {
+    "speaker": "INTERVIEWER",
+    "mode": "tts",
+    "step1_voice": "REPLACE_WITH_YOUR_VOICE_ID",
+    "step2_voice": "",
+    "step1_model": "eleven_v3",
+    "step2_model": "eleven_multilingual_sts_v2",
+    "style": "",
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "style_exaggeration": 0.4,
+    "speaker_boost": true,
+    "gain_db": 0.0
+  },
+  "PARTICIPANT 1": {
+    "speaker": "PARTICIPANT 1",
+    "mode": "tts",
+    "step1_voice": "REPLACE_WITH_YOUR_VOICE_ID",
+    "step2_voice": "",
+    "step1_model": "eleven_v3",
+    "step2_model": "eleven_multilingual_sts_v2",
+    "style": "",
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "style_exaggeration": 0.4,
+    "speaker_boost": true,
+    "gain_db": 0.0
+  }
+}

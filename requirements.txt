@@ -1,0 +1,17 @@
+# Sadhguru VO — runtime dependencies.
+#
+# The ElevenLabs calls themselves use only the standard library (urllib), so the
+# list is deliberately short. Tkinter ships with python.org builds on Windows.
+
+# Joins multi-chunk TTS renders on a frame boundary and writes the Step-1 file.
+# Requires ffmpeg on PATH (winget install Gyan.FFmpeg).
+pydub>=0.25.1
+
+# pydub imports the stdlib `audioop` module, which was REMOVED in Python 3.13.
+# audioop-lts restores it — without this, `import pydub` fails outright on 3.13+.
+audioop-lts>=0.2.2; python_version >= "3.13"
+
+# Optional: only needed when the emotion-tag pass runs on the "Vertex AI" or
+# "Gemini API key" provider. The default OpenAI-compatible provider talks plain
+# HTTP through urllib and needs nothing extra.
+google-genai>=1.0.0
