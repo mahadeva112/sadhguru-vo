@@ -1569,7 +1569,7 @@ class SadhguruVOApp(DubSyncTabMixin):
             lines.append(f"✦ {tagged} advertise {VO_LANGUAGE} support and sort "
                          f"to the top of every dropdown.")
         else:
-            lines.append(f"None advertise {VO_LANGUAGE} — eleven_v3 auto-detects "
+            lines.append(f"None advertise {VO_LANGUAGE} — eleven_v4 auto-detects "
                          f"the language from the text, so any voice still works.")
         if self._fav_ids:
             lines.append(f"★ {len(self._fav_ids)} favourite(s) pinned above them.")

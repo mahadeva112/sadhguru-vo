@@ -93,7 +93,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--emotion", action="store_true",
                    help="run the LLM emotion-tag pass before Step 1 "
-                        f"(v3 audio tags, {VO_LANGUAGE})")
+                        f"(v3/v4 audio tags, {VO_LANGUAGE})")
     p.add_argument("--language", default=VO_LANGUAGE, metavar="NAME",
                    help=f"language for the emotion pass (default: {VO_LANGUAGE})")
     p.add_argument("--llm-model", default=GEMINI_DEFAULT_MODEL, metavar="NAME",

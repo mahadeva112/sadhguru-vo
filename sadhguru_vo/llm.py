@@ -1,7 +1,7 @@
 """
 The optional emotion-tag pass.
 
-Before Step 1 the script can be run through an LLM that injects ElevenLabs v3
+Before Step 1 the script can be run through an LLM that injects ElevenLabs v4
 inline audio tags ([hindi accent], [calm], [contemplative], [slow], [pause], …)
 so the delivery sounds reflective rather than flat. Words and punctuation are
 preserved verbatim — only tags are added.
@@ -258,7 +258,7 @@ def run_emotion_enrichment(text: str,
                            model: str = GEMINI_DEFAULT_MODEL,
                            status_cb=None) -> str:
     """
-    Inject ElevenLabs v3 emotion / accent tags into the script.
+    Inject ElevenLabs v4 emotion / accent tags into the script.
 
     Best-effort: on ANY failure (missing prompt, no credentials, network error,
     empty response) the original text is returned so Step 1 is never blocked.

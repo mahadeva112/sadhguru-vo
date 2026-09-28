@@ -38,6 +38,7 @@ from typing import Dict, List, Optional, Sequence
 from .audio_backend import audio_segment
 from .config import (DEFAULT_VOICE_SETTINGS, ELEVENLABS_CHUNK_CHARS,
                      ELEVENLABS_STITCH_CHARS, ELEVENLABS_STITCH_CONTEXT,
+                     ELEVENLABS_TAG_MODEL_PREFIXES,
                      ELEVENLABS_STS_FALLBACKS, ELEVENLABS_STS_FORMATS,
                      ELEVENLABS_STS_MODEL, ELEVENLABS_STS_MODELS,
                      ELEVENLABS_TTS_FALLBACKS, ELEVENLABS_TTS_FORMATS,
@@ -178,7 +179,7 @@ def fetch_voices(api_key: str, language: str = VO_LANGUAGE,
     Return EVERY voice on the account as [{"voice_id", "name", "label"}].
 
     Voices advertising support for *language* are sorted to the top and marked
-    with a ✦ prefix, but the full list is returned — eleven_v3 auto-detects the
+    with a ✦ prefix, but the full list is returned — eleven_v4 auto-detects the
     language from the input text and works with any voice. Cached per
     (key fingerprint, language).
     """
@@ -819,12 +820,12 @@ def synthesize_tts(text: str, output_path: str, api_key: str,
     model_id = (model_id or ELEVENLABS_TTS_MODEL).strip() or ELEVENLABS_TTS_MODEL
     # Swap in a model this key can actually call before anything downstream
     # branches on it — the tag-stripping test below is one such branch, so a
-    # v3-to-v2 substitution has to happen first or the tags would be spoken.
+    # v4-to-v2 substitution has to happen first or the tags would be spoken.
     model_id = resolve_model(api_key, model_id, "tts", status_cb=status_cb)
 
-    # Inline audio tags are an eleven_v3 feature. Older models would read them
-    # aloud, so strip them for anything that isn't v3.
-    if not model_id.startswith("eleven_v3"):
+    # Inline audio tags are a v3 / v4 feature. Older models would read them
+    # aloud, so strip them for anything outside those families.
+    if not model_id.startswith(ELEVENLABS_TAG_MODEL_PREFIXES):
         stripped = strip_emotion_tags(text)
         if stripped.strip():
             text = stripped
@@ -835,7 +836,7 @@ def synthesize_tts(text: str, output_path: str, api_key: str,
     chunks = split_text_for_elevenlabs(text)
     total  = len(chunks)
 
-    # Indic-tuned voice settings. Lower stability + raised style give eleven_v3
+    # Indic-tuned voice settings. Lower stability + raised style give eleven_v4
     # room to act on the inline emotion / accent tags injected by the emotion
     # pass ([hindi accent], [calm], [slow], [pause]) so the delivery feels
     # reflective rather than flat.
@@ -876,7 +877,7 @@ def synthesize_tts(text: str, output_path: str, api_key: str,
             status_cb(f"TTS: ElevenLabs generating audio… chunk {i} of {total}"
                       if total > 1 else "TTS: ElevenLabs generating audio…")
 
-        # NOTE: do NOT send `language_code` — eleven_v3 auto-detects the target
+        # NOTE: do NOT send `language_code` — eleven_v3 / v4 auto-detect the target
         # language from the input text, and passing it triggers HTTP 400
         # `unsupported_language` on multilingual models.
         payload = {

@@ -406,9 +406,8 @@ can be compared before committing.
 ### Why sync does not come from the speed parameter
 
 ElevenLabs' `speed` is a hint: nothing guarantees the returned audio is any
-particular length, and `eleven_v3` — this app's default model — does not accept
-it at all. A timeline built on requested speed is built on a number nobody
-promised.
+particular length, and `eleven_v3` does not accept it at all. A timeline built
+on requested speed is built on a number nobody promised.
 
 So the render measures instead. Each chunk is generated, trimmed, and
 **measured**, and only then fitted: clip is 2,310 ms, slot is 2,000 ms, therefore
@@ -489,7 +488,7 @@ edit. None of it is shared with the original project.
 ### The emotion pass (optional)
 
 Ticking **Emotion tags** (or passing `--emotion`) runs the script through an LLM
-first, which injects ElevenLabs v3 inline audio tags (`[hindi accent]`, `[calm]`,
+first, which injects ElevenLabs v3/v4 inline audio tags (`[hindi accent]`, `[calm]`,
 `[contemplative]`, `[slow]`, `[pause]`) so the delivery is reflective rather than
 flat. Words and punctuation are preserved verbatim — only tags are added.
 
@@ -505,8 +504,9 @@ The pass is **best-effort**: any failure (missing prompt, bad credentials,
 network error, empty response) logs a note and falls back to the original text,
 so Step 1 is never blocked.
 
-Only `eleven_v3` understands the inline tags. On any other TTS model the tags are
-stripped before sending, so they are never read aloud.
+Only the `eleven_v4` / `eleven_v3` families understand the inline tags. On any
+other TTS model the tags are stripped before sending, so they are never read
+aloud.
 
 ---
 

@@ -62,16 +62,22 @@ _SSL_CTX.check_hostname = False
 _SSL_CTX.verify_mode    = ssl.CERT_NONE
 
 # ─── ElevenLabs models ───────────────────────────────────────────────────────
-# Step 1 (text-to-speech). Only eleven_v3 understands inline audio tags
-# ([calm], [pause], …) — for the other models the tags are stripped before
+# Step 1 (text-to-speech). Only the v3 / v4 families understand inline audio
+# tags ([calm], [pause], …) — for the other models the tags are stripped before
 # sending so they are not read aloud.
 ELEVENLABS_TTS_MODELS = {
+    "eleven_v4":              "v4 — most expressive (audio tags)",
     "eleven_v3":              "v3 — expressive (audio tags)",
     "eleven_multilingual_v2": "Multilingual v2 — stable",
     "eleven_turbo_v2_5":      "Turbo v2.5 — fast",
     "eleven_flash_v2_5":      "Flash v2.5 — fastest",
 }
-ELEVENLABS_TTS_MODEL = "eleven_v3"
+ELEVENLABS_TTS_MODEL = "eleven_v4"
+
+# Model-id prefixes that take inline audio tags. A prefix rather than exact ids
+# so family variants the catalogue serves (eleven_v3_conversational, …) keep
+# their tags too.
+ELEVENLABS_TAG_MODEL_PREFIXES = ("eleven_v4", "eleven_v3")
 
 # Step 2 (speech-to-speech / voice changer). STS keeps the source performance
 # (timing, emotion, delivery) and re-renders it in the target voice.
@@ -88,6 +94,7 @@ ELEVENLABS_STS_MODEL = "eleven_multilingual_sts_v2"
 # render fail with a 400 half an hour in, the first entry here the account
 # *does* have is substituted automatically (see elevenlabs_api.resolve_model).
 ELEVENLABS_TTS_FALLBACKS = (
+    "eleven_v4",
     "eleven_v3",
     "eleven_multilingual_v2",
     "eleven_turbo_v2_5",
@@ -220,7 +227,7 @@ MODE_TTS  = "tts"       # TTS only — for speakers using a stock voice as-is
 MODE_VC   = "vc"        # speech-to-speech only, on audio that already exists
 MODES     = (MODE_BOTH, MODE_TTS, MODE_VC)
 
-# Indic-tuned TTS voice settings. Lower stability + raised style give eleven_v3
+# Indic-tuned TTS voice settings. Lower stability + raised style give eleven_v4
 # room to act on the inline emotion / accent tags, so delivery is reflective
 # rather than flat.
 #
