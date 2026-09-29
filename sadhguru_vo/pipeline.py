@@ -36,10 +36,10 @@ from .config import (DIALOGUE_EDGE_FADE_MS, DIALOGUE_GAP_SAME_MS,
                      DIALOGUE_STS_PAD_MS, DIALOGUE_TARGET_DBFS,
                      DIALOGUE_TRIM_TURN_SILENCE, ELEVENLABS_STITCH_CHARS,
                      ELEVENLABS_STS_FORMATS,
-                     ELEVENLABS_STS_MODEL, ELEVENLABS_STS_MODELS,
+                     ELEVENLABS_STS_MODEL,
                      ELEVENLABS_TTS_FORMATS, ELEVENLABS_TTS_MODEL,
-                     ELEVENLABS_TTS_MODELS, GEMINI_DEFAULT_MODEL, MODE_BOTH,
-                     MODE_TTS, MODE_VC, MODES, VO_LANGUAGE)
+                     GEMINI_DEFAULT_MODEL, MODE_BOTH,
+                     MODE_TTS, MODE_VC, MODES, VO_LANGUAGE, is_model_id)
 from .elevenlabs_api import convert_voice, synthesize_tts
 from .llm import run_dialogue_emotion, run_emotion_enrichment
 from .prefs import sanitize_voice_id
@@ -120,8 +120,8 @@ def validate_request(req: VoRequest) -> VoRequest:
             f"(got {req.step2_voice!r}). It must be the raw 20-character ID, "
             "not a display label.")
 
-    m1 = req.step1_model if req.step1_model in ELEVENLABS_TTS_MODELS else ELEVENLABS_TTS_MODEL
-    m2 = req.step2_model if req.step2_model in ELEVENLABS_STS_MODELS else ELEVENLABS_STS_MODEL
+    m1 = req.step1_model if is_model_id(req.step1_model, "tts") else ELEVENLABS_TTS_MODEL
+    m2 = req.step2_model if is_model_id(req.step2_model, "sts") else ELEVENLABS_STS_MODEL
 
     vc_input = req.vc_input
     if req.mode == MODE_VC:

@@ -12,8 +12,7 @@ import re
 from typing import Dict, Optional
 
 from .config import (API_KEY_FILE, FAV_VOICES_FILE, PREFS_FILE,
-                     ELEVENLABS_STS_MODEL, ELEVENLABS_STS_MODELS,
-                     ELEVENLABS_TTS_MODEL, ELEVENLABS_TTS_MODELS,
+                     ELEVENLABS_STS_MODEL, ELEVENLABS_TTS_MODEL, is_model_id,
                      DEFAULT_TIMING, DUB_DEFAULT_STS_MODE, DUB_STS_MODES,
                      STEP1_VOICE_ID, STEP2_VOICE_ID, TIMING_MODES)
 
@@ -138,9 +137,9 @@ def read_prefs() -> Dict[str, str]:
             vid = sanitize_voice_id(data.get(key))
             if vid:
                 out[key] = vid
-        if data.get("step1_model") in ELEVENLABS_TTS_MODELS:
+        if is_model_id(data.get("step1_model"), "tts"):
             out["step1_model"] = data["step1_model"]
-        if data.get("step2_model") in ELEVENLABS_STS_MODELS:
+        if is_model_id(data.get("step2_model"), "sts"):
             out["step2_model"] = data["step2_model"]
         if data.get("studio_timing") in TIMING_MODES:
             out["studio_timing"] = data["studio_timing"]
@@ -158,10 +157,10 @@ def write_prefs(prefs: Dict[str, str]) -> None:
             "step1_voice": sanitize_voice_id(prefs.get("step1_voice")) or STEP1_VOICE_ID,
             "step2_voice": sanitize_voice_id(prefs.get("step2_voice")) or STEP2_VOICE_ID,
             "step1_model": (prefs.get("step1_model")
-                            if prefs.get("step1_model") in ELEVENLABS_TTS_MODELS
+                            if is_model_id(prefs.get("step1_model"), "tts")
                             else ELEVENLABS_TTS_MODEL),
             "step2_model": (prefs.get("step2_model")
-                            if prefs.get("step2_model") in ELEVENLABS_STS_MODELS
+                            if is_model_id(prefs.get("step2_model"), "sts")
                             else ELEVENLABS_STS_MODEL),
             "studio_timing": (prefs.get("studio_timing")
                               if prefs.get("studio_timing") in TIMING_MODES

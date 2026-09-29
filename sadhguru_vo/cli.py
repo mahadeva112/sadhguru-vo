@@ -28,7 +28,8 @@ from .config import (APP_NAME, APP_VERSION, CAST_FILE, DIALOGUE_GAP_SAME_MS,
                      DIALOGUE_GAP_SWITCH_MS, ELEVENLABS_STS_MODEL,
                      ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODEL,
                      ELEVENLABS_TTS_MODELS, GEMINI_DEFAULT_MODEL,
-                     STEP1_VOICE_NAME, STEP2_VOICE_NAME, VO_LANGUAGE)
+                     STEP1_VOICE_NAME, STEP2_VOICE_NAME, VO_LANGUAGE,
+                     is_model_id)
 from .elevenlabs_api import clear_voice_cache, fetch_voices, validate_api_key
 from .llm import llm_provider_label
 from .pipeline import (MODE_BOTH, MODE_TTS, MODE_VC, MODES, DialogueRequest,
@@ -53,6 +54,18 @@ def _configure_console() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError, OSError):
             pass
+
+
+def _model_arg(kind: str):
+    """argparse type for a model id. Not a fixed choices list: the account
+    decides what exists, and the render swaps in a fallback if it lacks it."""
+    def _check(value: str) -> str:
+        value = value.strip()
+        if not is_model_id(value, kind):
+            raise argparse.ArgumentTypeError(
+                f"{value!r} is not an ElevenLabs {kind.upper()} model id")
+        return value
+    return _check
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -85,11 +98,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--step2-voice", default=prefs["step2_voice"], metavar="ID",
                    help=f"Step-2 target voice id (default: {prefs['step2_voice']})")
     p.add_argument("--step1-model", default=prefs["step1_model"],
-                   choices=list(ELEVENLABS_TTS_MODELS),
-                   help=f"ElevenLabs TTS model (default: {prefs['step1_model']})")
+                   type=_model_arg("tts"), metavar="MODEL",
+                   help=f"ElevenLabs TTS model id, e.g. {', '.join(ELEVENLABS_TTS_MODELS)} "
+                        f"or any other the account serves (default: {prefs['step1_model']})")
     p.add_argument("--step2-model", default=prefs["step2_model"],
-                   choices=list(ELEVENLABS_STS_MODELS),
-                   help=f"ElevenLabs STS model (default: {prefs['step2_model']})")
+                   type=_model_arg("sts"), metavar="MODEL",
+                   help=f"ElevenLabs STS model id, e.g. {', '.join(ELEVENLABS_STS_MODELS)} "
+                        f"(default: {prefs['step2_model']})")
 
     p.add_argument("--emotion", action="store_true",
                    help="run the LLM emotion-tag pass before Step 1 "

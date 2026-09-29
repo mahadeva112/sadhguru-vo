@@ -28,9 +28,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional
 
 from .config import (CHUNKED_VOICE_SETTINGS, ELEVENLABS_STS_MODEL,
-                     ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODEL,
-                     ELEVENLABS_TTS_MODELS, MODE_BOTH, MODE_TTS,
-                     STEP1_VOICE_ID, STEP2_VOICE_ID)
+                     ELEVENLABS_TTS_MODEL, MODE_BOTH, MODE_TTS,
+                     STEP1_VOICE_ID, STEP2_VOICE_ID, is_model_id)
 from .prefs import sanitize_voice_id
 from .script_parser import normalize_speaker
 
@@ -132,8 +131,8 @@ class SpeakerRecipe:
             mode=mode,
             step1_voice=sanitize_voice_id(data.get("step1_voice")),
             step2_voice=sanitize_voice_id(data.get("step2_voice")),
-            step1_model=m1 if m1 in ELEVENLABS_TTS_MODELS else ELEVENLABS_TTS_MODEL,
-            step2_model=m2 if m2 in ELEVENLABS_STS_MODELS else ELEVENLABS_STS_MODEL,
+            step1_model=m1 if is_model_id(m1, "tts") else ELEVENLABS_TTS_MODEL,
+            step2_model=m2 if is_model_id(m2, "sts") else ELEVENLABS_STS_MODEL,
             style=str(data.get("style") or ""),
             stability=_clamp(data.get("stability"), 0.0, 1.0,
                              CHUNKED_VOICE_SETTINGS["stability"]),
@@ -268,9 +267,9 @@ def validate_cast(cast: Dict[str, SpeakerRecipe],
             problems.append(
                 f"{name}: set to 2-step but has no target voice (step2_voice) — "
                 f"choose one, or switch to {CAST_MODE_LABELS[MODE_TTS]}.")
-        if recipe.step1_model not in ELEVENLABS_TTS_MODELS:
+        if not is_model_id(recipe.step1_model, "tts"):
             problems.append(f"{name}: unknown TTS model {recipe.step1_model!r}.")
-        if recipe.two_step and recipe.step2_model not in ELEVENLABS_STS_MODELS:
+        if recipe.two_step and not is_model_id(recipe.step2_model, "sts"):
             problems.append(f"{name}: unknown STS model {recipe.step2_model!r}.")
     return problems
 

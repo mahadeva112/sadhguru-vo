@@ -508,6 +508,13 @@ Only the `eleven_v4` / `eleven_v3` families understand the inline tags. On any
 other TTS model the tags are stripped before sending, so they are never read
 aloud.
 
+The model dropdowns start with the built-in list; once the API key validates
+they are rebuilt from `/v1/models`, so every model that account serves shows
+up — `eleven_v4_turbo` and other v4 / v3 variants included, v4 first. A saved
+model the account no longer has stays selected, marked *not on this key*, and
+is swapped for the first available fallback at render time. The CLI takes any
+such id through `--step1-model` / `--step2-model`.
+
 ---
 
 ## Output files

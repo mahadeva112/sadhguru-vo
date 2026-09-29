@@ -43,7 +43,8 @@ from .cast import (CAST_MODE_LABELS, CAST_MODES, SpeakerRecipe,
 from .config import (ACCENT, APP_NAME, APP_USER_MODEL_ID, APP_VERSION, BG,
                      BTN_ACT, BTN_BG, BTN_FG, CAST_FILE,
                      DIALOGUE_GAP_SAME_MS, DIALOGUE_GAP_SWITCH_MS,
-                     ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, ERR_RED,
+                     ELEVENLABS_STS_MODELS, ELEVENLABS_TAG_MODEL_PREFIXES,
+                     ELEVENLABS_TTS_MODELS, ERR_RED,
                      GEMINI_DEFAULT_MODEL, ICON_PATH, INPUT_BG, INPUT_FG,
                      IS_MAC, IS_WINDOWS, PANEL, PANEL2,
                      PANEL_BORDER, RAIL_ACCENT, RAIL_BG, RAIL_HOVER, RAIL_SEL,
@@ -52,8 +53,8 @@ from .config import (ACCENT, APP_NAME, APP_USER_MODEL_ID, APP_VERSION, BG,
                      STEP2_VOICE_NAME, SVO_PANEL, TEXT, TEXT_FAINT,
                      TEXT_MUTED, TR_ACCENT, VO_LANGUAGE, WARN_AMBER,
                      btn_fg)
-from .elevenlabs_api import (clear_voice_cache, fetch_voices, validate_api_key,
-                             voice_cache_get)
+from .elevenlabs_api import (clear_voice_cache, fetch_models, fetch_voices,
+                             validate_api_key, voice_cache_get)
 from .gui_dub import _DUB_SUBTITLE, DubSyncTabMixin
 from .scaling import (F_MONO8, F_MONO8B, F_MONO9, F_MONO9B, F_MONO10,
                       F_MONO10B, F_UI8, F_UI9, S, enable_dpi_awareness,
@@ -233,6 +234,12 @@ class SadhguruVOApp(DubSyncTabMixin):
         self._label_to_id: Dict[str, str] = {}
         self._fav_ids = read_fav_voices()
         self._last_validated_key = None
+        # Model dropdown label → model id, per step. Seeded from the built-in
+        # tables; replaced by the account's catalogue once a key validates.
+        self._model_label_to_id: Dict[int, Dict[str, str]] = {
+            1: {v: k for k, v in ELEVENLABS_TTS_MODELS.items()},
+            2: {v: k for k, v in ELEVENLABS_STS_MODELS.items()},
+        }
 
         # ── Shell state ──────────────────────────────────────────────────────
         self._mode_index = 0
@@ -875,6 +882,7 @@ class SadhguruVOApp(DubSyncTabMixin):
                                    values=list(ELEVENLABS_TTS_MODELS.values()))
         s1_model_cb.pack(side="left", padx=(S(0), S(10)))
         s1_model_cb.bind("<<ComboboxSelected>>", lambda _e: self._pick_model(1))
+        self._step1_model_cb = s1_model_cb
         tk.Checkbutton(s1r, text=f"Emotion tags ({VO_LANGUAGE})",
                        variable=self._emotion_var, command=self._on_emotion_toggle,
                        bg=SVO_PANEL, fg=TEXT, selectcolor=SVO_PANEL,
@@ -913,6 +921,7 @@ class SadhguruVOApp(DubSyncTabMixin):
                                    values=list(ELEVENLABS_STS_MODELS.values()))
         s2_model_cb.pack(side="left", padx=(S(0), S(10)))
         s2_model_cb.bind("<<ComboboxSelected>>", lambda _e: self._pick_model(2))
+        self._step2_model_cb = s2_model_cb
         tk.Checkbutton(s2r, text="Keep Step-1 audio",
                        variable=self._keep_step1_var,
                        bg=SVO_PANEL, fg=TEXT, selectcolor=SVO_PANEL,
@@ -1593,6 +1602,8 @@ class SadhguruVOApp(DubSyncTabMixin):
         cached = voice_cache_get(key, VO_LANGUAGE)
         if self._last_validated_key == key and cached is not None:
             self._set_voice_options(cached)
+            # Cleared together with the voice cache, so this answers from memory.
+            self._set_model_options(fetch_models(key))
             self._set_el_status(f"✔ {len(cached)} voices", TR_ACCENT,
                                 self._voice_summary(cached))
             return
@@ -1620,10 +1631,13 @@ class SadhguruVOApp(DubSyncTabMixin):
                 return
 
             write_api_key_file(key)
+            # Best-effort: None (unknown) keeps the built-in model list.
+            catalogue = fetch_models(key, force_refresh=True)
 
             def _apply():
                 self._last_validated_key = key
                 self._set_voice_options(voices)
+                self._set_model_options(catalogue)
                 if voices:
                     self._set_el_status(f"✔ {len(voices)} voices", TR_ACCENT,
                                         self._voice_summary(voices))
@@ -1779,19 +1793,62 @@ class SadhguruVOApp(DubSyncTabMixin):
     def _pick_model(self, step: int):
         """Map the picked model label back to its raw id and persist it."""
         if step == 1:
-            label, table, var, key = (self._step1_model_disp.get(),
-                                      ELEVENLABS_TTS_MODELS,
-                                      self._step1_model_var, "step1_model")
+            label, var, key = (self._step1_model_disp.get(),
+                               self._step1_model_var, "step1_model")
         else:
-            label, table, var, key = (self._step2_model_disp.get(),
-                                      ELEVENLABS_STS_MODELS,
-                                      self._step2_model_var, "step2_model")
-        for mid, lbl in table.items():
-            if lbl == label:
-                var.set(mid)
-                self._prefs[key] = mid
-                write_prefs(self._prefs)
-                break
+            label, var, key = (self._step2_model_disp.get(),
+                               self._step2_model_var, "step2_model")
+        mid = self._model_label_to_id[step].get(label)
+        if mid:
+            var.set(mid)
+            self._prefs[key] = mid
+            write_prefs(self._prefs)
+
+    def _set_model_options(self, catalogue):
+        """Rebuild both model dropdowns from what this key can call.
+
+        *catalogue* is fetch_models()'s answer; None means "unknown" and keeps
+        the built-in tables. Every model the account serves is listed — v4 and
+        its variants first — with the app's own label where it has one and the
+        API's name otherwise. A saved model the account lacks stays selected
+        and says so; resolve_model() swaps it for a fallback at render time.
+        """
+        for step, kind, table, var, disp, cb in (
+                (1, "tts", ELEVENLABS_TTS_MODELS, self._step1_model_var,
+                 self._step1_model_disp, getattr(self, "_step1_model_cb", None)),
+                (2, "sts", ELEVENLABS_STS_MODELS, self._step2_model_var,
+                 self._step2_model_disp, getattr(self, "_step2_model_cb", None))):
+            served = dict(catalogue.get(kind) or {}) if catalogue else {}
+            models = served or dict(table)
+            order = list(table)
+
+            def _rank(mid, order=order):
+                family = next((i for i, p in enumerate(ELEVENLABS_TAG_MODEL_PREFIXES)
+                               if mid.startswith(p)), len(ELEVENLABS_TAG_MODEL_PREFIXES))
+                return (family, order.index(mid) if mid in order else len(order), mid)
+
+            label_to_id: Dict[str, str] = {}
+            id_to_label: Dict[str, str] = {}
+            for mid in sorted(models, key=_rank):
+                label = table.get(mid) or models[mid] or mid
+                if label in label_to_id:        # two models, one API name
+                    label = f"{label} ({mid})"
+                label_to_id[label] = mid
+                id_to_label[mid] = label
+
+            current = var.get()
+            if current and current not in id_to_label:
+                label = f"{table.get(current, current)} — not on this key"
+                label_to_id[label] = current
+                id_to_label[current] = label
+
+            self._model_label_to_id[step] = label_to_id
+            if cb is not None:
+                try:
+                    cb["values"] = list(label_to_id)
+                except tk.TclError:
+                    pass
+            disp.set(id_to_label.get(current, current))
 
     def _on_emotion_toggle(self):
         """Name the LLM that will run the pass, so a misconfigured provider is

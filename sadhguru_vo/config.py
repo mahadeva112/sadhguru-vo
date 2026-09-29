@@ -7,6 +7,7 @@ prefs.py and is persisted next to the app.
 """
 
 import os
+import re
 import ssl
 import sys
 
@@ -104,6 +105,27 @@ ELEVENLABS_STS_FALLBACKS = (
     "eleven_multilingual_sts_v2",
     "eleven_english_sts_v2",
 )
+
+# The tables above are labels and defaults, not a whitelist. Once a key is
+# validated the model dropdowns list whatever /v1/models serves that account
+# (eleven_v4 variants such as a turbo build included), so any well-formed id
+# is accepted here and resolve_model() is what checks it against the account
+# at render time. Each id is still kept on its own side — an STS model saved
+# as the Step-1 model is a mistake, not a new model.
+_MODEL_ID_RE = re.compile(r"^eleven_[a-z0-9_]+$")
+
+
+def is_model_id(model_id, kind: str = "tts") -> bool:
+    """True when *model_id* can be stored as a *kind* ("tts"/"sts") model."""
+    mid = str(model_id or "").strip()
+    own, other = ((ELEVENLABS_TTS_MODELS, ELEVENLABS_STS_MODELS) if kind == "tts"
+                  else (ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS))
+    if mid in own:
+        return True
+    if not _MODEL_ID_RE.match(mid) or mid in other:
+        return False
+    # ElevenLabs names every voice-conversion model *_sts_*.
+    return ("_sts" in mid) == (kind == "sts")
 
 # ─── Pinned pipeline defaults ────────────────────────────────────────────────
 # Step 1 renders the script with a TTS voice; Step 2 pushes that audio through
