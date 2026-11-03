@@ -481,6 +481,7 @@ edit. None of it is shared with the original project.
 | `sadhguru_vo_prefs.json` | The two voice IDs and the two model IDs. Saved on every change. |
 | `cast.json` | Dialogue tab: one voice recipe per speaker. Saved on every change; override with `--cast FILE`. Copy from `cast.example.json`. |
 | `fav_voices.json` | Starred voices — pinned to the top of both dropdowns with a ★. |
+| `voice_cache.json` | The account's voice list, so a launch doesn't re-walk every page of `/v2/voices` (~1.5 min for ~5000 voices). Tied to the API key by a hash. Rebuilt by **↻ Reload Voices** or `--list-voices --refresh`; safe to delete. |
 | `llm_settings.json` | Provider + credentials for the optional emotion pass. |
 | `prompts/Step4_Emotion_Prompt_<Language>.txt` | The emotion-pass prompt, one per language. |
 | `error_log.txt` | Startup failures only. Created on demand. |

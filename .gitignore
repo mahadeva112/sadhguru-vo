@@ -12,6 +12,8 @@ vertex_key.json
 # User state (voice/model choices, starred voices)
 sadhguru_vo_prefs.json
 fav_voices.json
+voice_cache.json
+voice_cache.json.tmp
 
 # Studio-specific voice config — the voice ids and speaker names a given
 # installation uses. Ship voices.example.json / cast.example.json instead.

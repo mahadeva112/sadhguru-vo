@@ -32,6 +32,7 @@ import os
 import re
 import subprocess
 import threading
+import time
 import tkinter as tk
 from tkinter import (filedialog, font as tkfont, messagebox,
                      scrolledtext, ttk)
@@ -54,7 +55,8 @@ from .config import (ACCENT, APP_NAME, APP_USER_MODEL_ID, APP_VERSION, BG,
                      TEXT_MUTED, TR_ACCENT, VO_LANGUAGE, WARN_AMBER,
                      btn_fg)
 from .elevenlabs_api import (clear_voice_cache, fetch_models, fetch_voices,
-                             validate_api_key, voice_cache_get)
+                             validate_api_key, voice_cache_get,
+                             voice_cache_saved_at)
 from .gui_dub import _DUB_SUBTITLE, DubSyncTabMixin
 from .scaling import (F_MONO8, F_MONO8B, F_MONO9, F_MONO9B, F_MONO10,
                       F_MONO10B, F_UI8, F_UI9, S, enable_dpi_awareness,
@@ -1582,6 +1584,11 @@ class SadhguruVOApp(DubSyncTabMixin):
                          f"the language from the text, so any voice still works.")
         if self._fav_ids:
             lines.append(f"★ {len(self._fav_ids)} favourite(s) pinned above them.")
+        saved = voice_cache_saved_at((self._api_key_var.get() or "").strip())
+        if saved:
+            lines.append("List fetched from ElevenLabs "
+                         + time.strftime("%d %b %Y, %H:%M", time.localtime(saved))
+                         + " and kept on disk.")
         lines.append("↻ Reload Voices after adding a voice in ElevenLabs.")
         return "\n".join(lines)
 
@@ -1623,8 +1630,17 @@ class SadhguruVOApp(DubSyncTabMixin):
                 "◌ loading…", WARN_AMBER,
                 f"Key accepted. Fetching the voice catalogue and sorting "
                 f"{VO_LANGUAGE} voices to the top…"))
+            def _progress(loaded, total):
+                count = f"{loaded}/{total}" if total else str(loaded)
+                self._ui(lambda c=count: self._set_el_status(
+                    f"◌ loading {c}…", WARN_AMBER,
+                    "Key accepted. Fetching the voice catalogue page by "
+                    "page (100 voices per page)…"))
+
+            # Not force_refresh: a launch answers from the disk copy. Reload
+            # Voices clears that copy first, so it still re-fetches.
             try:
-                voices = fetch_voices(key, VO_LANGUAGE, force_refresh=True)
+                voices = fetch_voices(key, VO_LANGUAGE, progress_cb=_progress)
             except Exception as e:
                 self._ui(lambda err=str(e): self._set_el_status(
                     _short_error(err), ERR_RED, err))
