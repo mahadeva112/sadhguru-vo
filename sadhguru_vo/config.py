@@ -12,7 +12,7 @@ import ssl
 import sys
 
 APP_NAME    = "Sadhguru VO"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 # Stable id so Windows groups the taskbar button under our own icon instead of
 # lumping it in with a generic "Python" button. Set by gui.py at startup.
@@ -34,6 +34,9 @@ ICON_PATH         = os.path.join(ASSETS_DIR, "sadhguru_vo.ico")
 API_KEY_FILE      = os.path.join(APP_DIR, "api.txt")
 PREFS_FILE        = os.path.join(APP_DIR, "sadhguru_vo_prefs.json")
 FAV_VOICES_FILE   = os.path.join(APP_DIR, "fav_voices.json")
+# The account's voice catalogue, so a launch doesn't re-walk ~50 pages of
+# /v2/voices. Rewritten by "Reload Voices" / --list-voices --refresh.
+VOICE_CACHE_FILE  = os.path.join(APP_DIR, "voice_cache.json")
 # Default cast for the Dialogue tab. A project can point at its own file
 # instead; this one is just what the tab loads and auto-saves when it isn't told
 # otherwise.

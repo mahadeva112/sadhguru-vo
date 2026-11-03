@@ -24,11 +24,13 @@ remembered per key in _FORMAT_MEMO so a sixty-turn dialogue probes once rather
 than sixty times.
 """
 
+import hashlib
 import json
 import mimetypes
 import os
 import re
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -43,7 +45,7 @@ from .config import (DEFAULT_VOICE_SETTINGS, ELEVENLABS_CHUNK_CHARS,
                      ELEVENLABS_STS_MODEL, ELEVENLABS_STS_MODELS,
                      ELEVENLABS_TTS_FALLBACKS, ELEVENLABS_TTS_FORMATS,
                      ELEVENLABS_TTS_MODEL, ELEVENLABS_TTS_MODELS,
-                     LANGUAGE_TOKENS, VO_LANGUAGE, _SSL_CTX)
+                     LANGUAGE_TOKENS, VO_LANGUAGE, VOICE_CACHE_FILE, _SSL_CTX)
 from .prefs import api_key_fingerprint, sanitize_voice_id
 
 # Voice catalogue cache keyed by (api-key fingerprint, language) so the list
@@ -172,28 +174,10 @@ def _voice_supports_language(voice: dict, lang_tokens: tuple) -> bool:
     return False
 
 
-def fetch_voices(api_key: str, language: str = VO_LANGUAGE,
-                 force_refresh: bool = False,
-                 timeout: float = 30.0) -> List[Dict[str, str]]:
-    """
-    Return EVERY voice on the account as [{"voice_id", "name", "label"}].
-
-    Voices advertising support for *language* are sorted to the top and marked
-    with a ✦ prefix, but the full list is returned — eleven_v4 auto-detects the
-    language from the input text and works with any voice. Cached per
-    (key fingerprint, language).
-    """
-    api_key = (api_key or "").strip()
-    if not api_key:
-        raise ValueError("API key is empty.")
-
-    lang_tokens = _lang_tokens(language)
-    cache_key   = (api_key_fingerprint(api_key), language)
-    if not force_refresh and cache_key in _EL_VOICE_CACHE:
-        return _EL_VOICE_CACHE[cache_key]
-
+def _get_voices_json(url: str, api_key: str, timeout: float) -> dict:
+    """GET one voices endpoint page; raises ValueError with a readable message."""
     req = urllib.request.Request(
-        "https://api.elevenlabs.io/v1/voices",
+        url,
         method="GET",
         headers={"xi-api-key": api_key, "Accept": "application/json"},
     )
@@ -210,16 +194,170 @@ def fetch_voices(api_key: str, language: str = VO_LANGUAGE,
         raise ValueError(f"Network error fetching voices: {e.reason}") from None
     except Exception as e:
         raise ValueError(f"Could not fetch voices: {e}") from None
+    return payload if isinstance(payload, dict) else {}
 
+
+def _payload_voices(payload: dict) -> List[dict]:
     voices = payload.get("voices") or []
-    if not isinstance(voices, list):
-        voices = []
+    return [v for v in voices if isinstance(v, dict)] if isinstance(voices, list) else []
+
+
+def _fetch_raw_voices(api_key: str, timeout: float,
+                      progress_cb=None) -> List[dict]:
+    """
+    Every voice the account can use, as raw API dicts.
+
+    /v1/voices is no longer the full catalogue: on an account with thousands of
+    saved / professional voices it answers with just the ~21 premade ones.
+    /v2/voices has the rest, but only 100 per page, walked via next_page_token.
+    The v1 list is still merged in so the premade voices are never lost if v2
+    leaves them out; duplicates are dropped by voice_id.
+    """
+    voices: List[dict] = []
+    token = ""
+    total = None
+    while True:
+        query = {"page_size": "100", "include_total_count": "true"}
+        if token:
+            query["next_page_token"] = token
+        page = _get_voices_json(
+            "https://api.elevenlabs.io/v2/voices?" + urllib.parse.urlencode(query),
+            api_key, timeout)
+        voices.extend(_payload_voices(page))
+        if total is None and isinstance(page.get("total_count"), int):
+            total = page["total_count"]
+        if progress_cb:
+            progress_cb(len(voices), total)
+        token = str(page.get("next_page_token") or "")
+        if not page.get("has_more") or not token:
+            break
+
+    try:
+        voices.extend(_payload_voices(_get_voices_json(
+            "https://api.elevenlabs.io/v1/voices", api_key, timeout)))
+    except ValueError:
+        if not voices:
+            raise
+
+    seen = set()
+    unique: List[dict] = []
+    for v in voices:
+        vid = v.get("voice_id") or v.get("voiceId") or ""
+        if vid and vid not in seen:
+            seen.add(vid)
+            unique.append(v)
+    return unique
+
+
+# ─── On-disk voice catalogue ─────────────────────────────────────────────────
+#
+# Walking /v2/voices for a ~5000-voice account takes about a minute and a half,
+# so the raw list is kept in VOICE_CACHE_FILE and a launch reads that instead.
+# Raw rather than the finished labels: the ✦ sort depends on the language, and
+# rebuilding it from the raw list is instant. Only the fields fetch_voices and
+# _voice_supports_language read are kept — full v2 objects carry preview URLs
+# and settings that would make the file tens of MB.
+
+_DISK_VOICE_FIELDS = ("voice_id", "name", "labels", "category", "language",
+                      "language_code", "locale", "description")
+_DISK_LANG_FIELDS  = ("language", "code", "name", "locale")
+
+
+def _disk_key_hash(api_key: str) -> str:
+    """Which key the file belongs to. A hash, so no part of the key is on disk."""
+    return hashlib.sha256(api_key.strip().encode("utf-8")).hexdigest()[:16]
+
+
+def _trim_voice(v: dict) -> dict:
+    out = {k: v[k] for k in _DISK_VOICE_FIELDS if v.get(k)}
+    verified = v.get("verified_languages")
+    if isinstance(verified, list):
+        out["verified_languages"] = [
+            {k: e[k] for k in _DISK_LANG_FIELDS if isinstance(e.get(k), str)}
+            if isinstance(e, dict) else e
+            for e in verified if isinstance(e, (dict, str))]
+    return out
+
+
+def _read_disk_cache() -> Optional[dict]:
+    try:
+        with open(VOICE_CACHE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _load_disk_voices(api_key: str) -> Optional[List[dict]]:
+    """The saved raw list for this key, or None if there isn't a usable one."""
+    data = _read_disk_cache()
+    if not data or data.get("key") != _disk_key_hash(api_key):
+        return None
+    voices = data.get("voices")
+    return voices if isinstance(voices, list) and voices else None
+
+
+def _save_disk_voices(api_key: str, voices: List[dict]) -> None:
+    """Best-effort, like every other state file: a read-only folder only means
+    the next launch fetches again. Written to a temp file and swapped in, so a
+    crash mid-write can't leave a half file that reads as an empty account."""
+    data = {"key": _disk_key_hash(api_key), "saved_at": time.time(),
+            "voices": [_trim_voice(v) for v in voices]}
+    tmp = VOICE_CACHE_FILE + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, VOICE_CACHE_FILE)
+    except OSError:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def voice_cache_saved_at(api_key: str) -> Optional[float]:
+    """When this key's voice list was last fetched from ElevenLabs (epoch
+    seconds), or None if it isn't on disk."""
+    data = _read_disk_cache()
+    if not data or data.get("key") != _disk_key_hash(api_key or ""):
+        return None
+    ts = data.get("saved_at")
+    return float(ts) if isinstance(ts, (int, float)) else None
+
+
+def fetch_voices(api_key: str, language: str = VO_LANGUAGE,
+                 force_refresh: bool = False,
+                 timeout: float = 30.0,
+                 progress_cb=None) -> List[Dict[str, str]]:
+    """
+    Return EVERY voice on the account as [{"voice_id", "name", "label"}].
+
+    Voices advertising support for *language* are sorted to the top and marked
+    with a ✦ prefix, but the full list is returned — eleven_v4 auto-detects the
+    language from the input text and works with any voice. Cached per
+    (key fingerprint, language) in memory, and the raw list on disk in
+    VOICE_CACHE_FILE. *force_refresh* skips both and re-fetches.
+
+    *progress_cb(loaded, total)* is called after each page; *total* is None if
+    the API did not report it. A large account is ~50 pages.
+    """
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise ValueError("API key is empty.")
+
+    lang_tokens = _lang_tokens(language)
+    cache_key   = (api_key_fingerprint(api_key), language)
+    if not force_refresh and cache_key in _EL_VOICE_CACHE:
+        return _EL_VOICE_CACHE[cache_key]
+
+    voices = None if force_refresh else _load_disk_voices(api_key)
+    if voices is None:
+        voices = _fetch_raw_voices(api_key, timeout, progress_cb)
+        _save_disk_voices(api_key, voices)
 
     matched: List[Dict[str, str]] = []
     others:  List[Dict[str, str]] = []
     for v in voices:
-        if not isinstance(v, dict):
-            continue
         vid = v.get("voice_id") or v.get("voiceId") or ""
         if not vid:
             continue
@@ -261,9 +399,17 @@ def clear_voice_cache(language: Optional[str] = None,
     The model catalogue for the same key scope goes with it: "Reload Voices" is
     the one gesture that means "re-ask this account what it has", and a key that
     was just upgraded (or swapped) must not keep answering from a stale list of
-    models.
+    models. The on-disk voice list goes too (it is not per-language), so the
+    next fetch_voices really asks ElevenLabs.
     """
     clear_model_cache(api_key)
+    data = _read_disk_cache()
+    if data is not None and (api_key is None
+                             or data.get("key") == _disk_key_hash(api_key)):
+        try:
+            os.remove(VOICE_CACHE_FILE)
+        except OSError:
+            pass
     if language is None and api_key is None:
         _EL_VOICE_CACHE.clear()
         return
